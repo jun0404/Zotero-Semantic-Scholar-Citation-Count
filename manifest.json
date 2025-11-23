@@ -1,0 +1,20 @@
+{
+  "manifest_version": 2,
+  "name": "Semantic Scholar Citations Fixed",
+  "version": "2.1.1",
+  "description": "Reliable citation fetcher with simple format - All-in-one version",
+  "author": "Sangjun",
+  "homepage_url": "https://github.com/yourusername/zotero-semantic-scholar-citations",
+  "applications": {
+    "zotero": {
+      "id": "semantic-scholar-citations-fixed@example.com",
+      "update_url": "https://raw.githubusercontent.com/yourusername/zotero-semantic-scholar-citations/main/update.json",
+      "strict_min_version": "6.0",
+      "strict_max_version": "7.0.*"
+    }
+  },
+  "icons": {
+    "48": "icon.png",
+    "96": "icon@2x.png"
+  }
+}

@@ -1,16 +1,33 @@
-# Semantic Scholar Citations - Fixed Version 2.1.1
+# Semantic Scholar Citations for Zotero
 
-This is the fixed all-in-one version that combines:
-- Reliability of v1.0 (single file structure)
-- New citation format: XX (number of citation counts)
-- No external dependencies
+Fetches citation counts from Semantic Scholar and stores them in the **Extra** field of your Zotero items.
 
-## Files:
-- manifest.json - Plugin configuration
-- bootstrap.js - All plugin code in one file
+## Compatibility
 
-## Build:
-Simply zip these two files together:
+- **Zotero 7.0 – 8.0.\*** (built on Firefox 115 / 140 ESR)
+
+## Features
+
+- Lookup by DOI, arXiv ID, or title search (with automatic fallback)
+- Batch update for selected items or entire library
+- Right-click context menu, Tools menu entries, and keyboard shortcut (Ctrl+Shift+C)
+- Rate-limited API requests to stay within Semantic Scholar limits
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `manifest.json` | Plugin manifest (version, compatibility, metadata) |
+| `bootstrap.js` | All plugin logic in a single bootstrapped file |
+
+## Build
+
 ```bash
-zip semantic-scholar-citations-fixed-2.1.1.xpi manifest.json bootstrap.js
+zip semantic-scholar-citations-3.0.0.xpi manifest.json bootstrap.js
 ```
+
+## Install
+
+1. Open Zotero and go to **Tools > Add-ons**
+2. Click the gear icon and choose **Install Add-on From File...**
+3. Select the `.xpi` file

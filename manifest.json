@@ -1,16 +1,16 @@
 {
   "manifest_version": 2,
-  "name": "Semantic Scholar Citations Fixed",
-  "version": "2.1.1",
-  "description": "Reliable citation fetcher with simple format - All-in-one version",
+  "name": "Semantic Scholar Citations",
+  "version": "3.0.0",
+  "description": "Fetches citation counts from Semantic Scholar and displays them in the Extra field",
   "author": "Sangjun",
-  "homepage_url": "https://github.com/yourusername/zotero-semantic-scholar-citations",
+  "homepage_url": "https://github.com/jun0404/Zotero-Semantic-Scholar-Citation-Count",
   "applications": {
     "zotero": {
-      "id": "semantic-scholar-citations-fixed@example.com",
-      "update_url": "https://raw.githubusercontent.com/yourusername/zotero-semantic-scholar-citations/main/update.json",
-      "strict_min_version": "6.0",
-      "strict_max_version": "7.0.*"
+      "id": "semantic-scholar-citations@example.com",
+      "update_url": "https://raw.githubusercontent.com/jun0404/Zotero-Semantic-Scholar-Citation-Count/main/update.json",
+      "strict_min_version": "7.0",
+      "strict_max_version": "8.0.*"
     }
   },
   "icons": {

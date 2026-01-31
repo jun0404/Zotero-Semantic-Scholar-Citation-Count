@@ -16,7 +16,9 @@ function install() {
     Zotero.debug("Semantic Scholar Citations: install");
 }
 
-function startup({ id, version, rootURI }) {
+async function startup({ id, version, rootURI }) {
+    await Zotero.initializationPromise;
+
     Zotero.debug("Semantic Scholar Citations: startup v3.0.0");
 
     SemanticScholarCitations = {
@@ -392,6 +394,14 @@ function startup({ id, version, rootURI }) {
             Services.prompt.alert(window, title, message);
         },
     };
+
+    // Add UI to any windows that are already open
+    var windows = Zotero.getMainWindows();
+    for (let win of windows) {
+        if (win.ZoteroPane) {
+            SemanticScholarCitations.addToWindow(win);
+        }
+    }
 }
 
 // Called each time a main Zotero window opens (Zotero 7+)

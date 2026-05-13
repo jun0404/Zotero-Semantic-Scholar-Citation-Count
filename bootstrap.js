@@ -1,12 +1,16 @@
 /**
  * Semantic Scholar Citations Plugin for Zotero
- * Compatible with Zotero 7.x and 8.x (Firefox 115 / 140 ESR)
+ * Compatible with Zotero 8.x and 9.x (Firefox 140 ESR)
  *
- * Uses the official bootstrapped plugin pattern with
- * onMainWindowLoad / onMainWindowUnload hooks for per-window UI.
+ * Menu items are registered through the Zotero 8+ MenuManager API, which
+ * handles per-window UI and cleanup automatically. The keyboard shortcut is
+ * still added per main window through the bootstrap window hooks because
+ * MenuManager does not (yet) expose keyset registration.
  */
 
 var SemanticScholarCitations;
+
+const FTL_FILE = "semantic-scholar-citations.ftl";
 
 // ---------------------------------------------------------------------------
 // Bootstrap lifecycle
@@ -19,12 +23,21 @@ function install() {
 async function startup({ id, version, rootURI }) {
     await Zotero.initializationPromise;
 
-    Zotero.debug("Semantic Scholar Citations: startup v3.0.0");
+    Zotero.debug("Semantic Scholar Citations: startup v4.0.0");
 
     SemanticScholarCitations = {
         id,
         version,
         rootURI,
+        pluginID: id,
+
+        // Handles returned by MenuManager.registerMenu so we can force
+        // cleanup during dev reloads. MenuManager normally cleans up on
+        // plugin disable/uninstall via pluginID matching.
+        registeredMenus: [],
+
+        // Track per-window keyset elements so we can remove them on unload.
+        windowKeyIDs: new Map(),
 
         // ---- Configuration ------------------------------------------------
         config: {
@@ -35,112 +48,150 @@ async function startup({ id, version, rootURI }) {
             lastRequestTime: 0,
         },
 
-        // Track elements added per-window so we can clean up properly
-        windowElementIDs: new Map(), // window -> [id, ...]
+        // ---- Menu registration (Zotero 8+) --------------------------------
 
-        // ---- Per-window UI ------------------------------------------------
-
-        addToWindow(window) {
-            const doc = window.document;
-            const ids = [];
-
+        registerMenus() {
             try {
-                // --- Tools menu items ---
-                const toolsMenu = doc.getElementById("menu_ToolsPopup");
-                if (toolsMenu) {
-                    const menuitem = doc.createXULElement("menuitem");
-                    menuitem.id = "semantic-scholar-citations-menu";
-                    menuitem.setAttribute(
-                        "label",
-                        "Update Citation Counts (Selected Items)"
-                    );
-                    menuitem.addEventListener("command", () =>
-                        this.updateSelectedItems(window)
-                    );
-                    toolsMenu.appendChild(menuitem);
-                    ids.push(menuitem.id);
+                const toolsId = Zotero.MenuManager.registerMenu({
+                    menuID: "semantic-scholar-tools-menu",
+                    pluginID: this.pluginID,
+                    target: "main/menubar/tools",
+                    menus: [
+                        {
+                            menuType: "menuitem",
+                            l10nID: "semantic-scholar-update-selected",
+                            onCommand: () =>
+                                this.updateSelectedItems(
+                                    this.getActiveWindow()
+                                ),
+                        },
+                        {
+                            menuType: "menuitem",
+                            l10nID: "semantic-scholar-update-all",
+                            onCommand: () =>
+                                this.updateAllItems(this.getActiveWindow()),
+                        },
+                    ],
+                });
 
-                    const menuitemAll = doc.createXULElement("menuitem");
-                    menuitemAll.id = "semantic-scholar-citations-menu-all";
-                    menuitemAll.setAttribute(
-                        "label",
-                        "Update All Citation Counts"
-                    );
-                    menuitemAll.addEventListener("command", () =>
-                        this.updateAllItems(window)
-                    );
-                    toolsMenu.appendChild(menuitemAll);
-                    ids.push(menuitemAll.id);
-                }
+                const itemsId = Zotero.MenuManager.registerMenu({
+                    menuID: "semantic-scholar-items-menu",
+                    pluginID: this.pluginID,
+                    target: "main/library/item",
+                    menus: [
+                        {
+                            menuType: "menuitem",
+                            l10nID: "semantic-scholar-fetch-context",
+                            onShowing: (_event, context) => {
+                                const items = context?.items ?? [];
+                                const visible = items.some((it) =>
+                                    it?.isRegularItem?.()
+                                );
+                                context?.setVisible?.(visible);
+                            },
+                            onCommand: () =>
+                                this.updateSelectedItems(
+                                    this.getActiveWindow()
+                                ),
+                        },
+                    ],
+                });
 
-                // --- Item context menu ---
-                const itemMenu = doc.getElementById("zotero-itemmenu");
-                if (itemMenu) {
-                    const sep = doc.createXULElement("menuseparator");
-                    sep.id = "semantic-scholar-citations-separator";
-                    itemMenu.appendChild(sep);
-                    ids.push(sep.id);
-
-                    const ctxItem = doc.createXULElement("menuitem");
-                    ctxItem.id = "semantic-scholar-citations-context";
-                    ctxItem.setAttribute("label", "Fetch Citation Count");
-                    ctxItem.addEventListener("command", () =>
-                        this.updateSelectedItems(window)
-                    );
-                    itemMenu.appendChild(ctxItem);
-                    ids.push(ctxItem.id);
-                }
-
-                // --- Keyboard shortcut (Ctrl+Shift+C) ---
-                const keySet = doc.getElementById("mainKeyset");
-                if (keySet) {
-                    const key = doc.createXULElement("key");
-                    key.id = "semantic-scholar-citations-key";
-                    key.setAttribute("key", "C");
-                    key.setAttribute("modifiers", "control shift");
-                    key.addEventListener("command", () =>
-                        this.updateSelectedItems(window)
-                    );
-                    keySet.appendChild(key);
-                    ids.push(key.id);
-                }
-
+                this.registeredMenus = [toolsId, itemsId].filter(Boolean);
                 Zotero.debug(
-                    "Semantic Scholar Citations: UI added to window"
+                    "Semantic Scholar Citations: registered MenuManager menus"
                 );
             } catch (e) {
                 Zotero.debug(
-                    "Semantic Scholar Citations: error adding UI – " + e
+                    "Semantic Scholar Citations: menu registration failed – " +
+                        e
                 );
             }
-
-            this.windowElementIDs.set(window, ids);
         },
 
-        removeFromWindow(window) {
-            const doc = window.document;
-            const ids = this.windowElementIDs.get(window) || [];
-            for (const id of ids) {
-                const el = doc.getElementById(id);
+        unregisterMenus() {
+            for (const handle of this.registeredMenus) {
+                try {
+                    if (typeof handle === "string") {
+                        Zotero.MenuManager.unregisterMenu(handle);
+                    } else if (handle && typeof handle.unregister === "function") {
+                        handle.unregister();
+                    }
+                } catch (e) {
+                    /* ignore */
+                }
+            }
+            this.registeredMenus = [];
+        },
+
+        // ---- Per-window UI (keyboard shortcut + FTL) ----------------------
+
+        insertFTL(window) {
+            try {
+                if (window?.MozXULElement?.insertFTLIfNeeded) {
+                    window.MozXULElement.insertFTLIfNeeded(FTL_FILE);
+                }
+            } catch (e) {
+                Zotero.debug(
+                    "Semantic Scholar Citations: FTL insert error – " + e
+                );
+            }
+        },
+
+        addKeyboardShortcut(window) {
+            try {
+                const doc = window.document;
+                const keySet = doc.getElementById("mainKeyset");
+                if (!keySet) return;
+                if (doc.getElementById("semantic-scholar-citations-key")) {
+                    return;
+                }
+
+                const key = doc.createXULElement("key");
+                key.id = "semantic-scholar-citations-key";
+                key.setAttribute("key", "C");
+                key.setAttribute("modifiers", "accel,shift");
+                key.addEventListener("command", () =>
+                    this.updateSelectedItems(window)
+                );
+                keySet.appendChild(key);
+                this.windowKeyIDs.set(
+                    window,
+                    "semantic-scholar-citations-key"
+                );
+            } catch (e) {
+                Zotero.debug(
+                    "Semantic Scholar Citations: keyset error – " + e
+                );
+            }
+        },
+
+        removeKeyboardShortcut(window) {
+            const id = this.windowKeyIDs.get(window);
+            if (!id) return;
+            try {
+                const el = window.document.getElementById(id);
                 if (el) el.remove();
+            } catch (e) {
+                /* ignore */
             }
-            this.windowElementIDs.delete(window);
-            Zotero.debug(
-                "Semantic Scholar Citations: UI removed from window"
-            );
+            this.windowKeyIDs.delete(window);
         },
 
-        removeFromAllWindows() {
-            for (const window of this.windowElementIDs.keys()) {
-                this.removeFromWindow(window);
+        getActiveWindow() {
+            if (typeof Zotero.getMainWindow === "function") {
+                const w = Zotero.getMainWindow();
+                if (w) return w;
             }
+            const windows = Zotero.getMainWindows();
+            return windows && windows.length ? windows[0] : null;
         },
 
         // ---- Actions ------------------------------------------------------
 
         async updateSelectedItems(window) {
             const zoteroPane = Zotero.getActiveZoteroPane();
-            const items = zoteroPane.getSelectedItems();
+            const items = zoteroPane ? zoteroPane.getSelectedItems() : [];
             if (items.length === 0) {
                 this.showAlert(
                     window,
@@ -345,7 +396,6 @@ async function startup({ id, version, rootURI }) {
         async storeCitationCount(item, citationCount) {
             let extra = item.getField("extra") || "";
 
-            // Strip previous citation count lines (both old & new formats)
             extra = extra.replace(
                 /^\d+\s*\(number of citation counts\)\s*\n?~{4,}\s*\n?/m,
                 ""
@@ -391,37 +441,58 @@ async function startup({ id, version, rootURI }) {
         },
 
         showAlert(window, title, message) {
-            Services.prompt.alert(window, title, message);
+            try {
+                Services.prompt.alert(
+                    window || this.getActiveWindow(),
+                    title,
+                    message
+                );
+            } catch (e) {
+                Zotero.debug(
+                    "Semantic Scholar Citations: alert error – " + e
+                );
+            }
         },
     };
 
-    // Add UI to any windows that are already open
-    var windows = Zotero.getMainWindows();
-    for (let win of windows) {
+    // Register menus once for the lifetime of the plugin.
+    SemanticScholarCitations.registerMenus();
+
+    // Inject FTL and keyboard shortcut into any windows already open.
+    for (const win of Zotero.getMainWindows()) {
         if (win.ZoteroPane) {
-            SemanticScholarCitations.addToWindow(win);
+            SemanticScholarCitations.insertFTL(win);
+            SemanticScholarCitations.addKeyboardShortcut(win);
         }
     }
 }
 
-// Called each time a main Zotero window opens (Zotero 7+)
+// Called each time a main Zotero window opens (Zotero 7+).
 function onMainWindowLoad({ window }) {
     if (SemanticScholarCitations) {
-        SemanticScholarCitations.addToWindow(window);
+        SemanticScholarCitations.insertFTL(window);
+        SemanticScholarCitations.addKeyboardShortcut(window);
     }
 }
 
-// Called each time a main Zotero window closes (Zotero 7+)
+// Called each time a main Zotero window closes (Zotero 7+).
 function onMainWindowUnload({ window }) {
     if (SemanticScholarCitations) {
-        SemanticScholarCitations.removeFromWindow(window);
+        SemanticScholarCitations.removeKeyboardShortcut(window);
     }
 }
 
 function shutdown() {
     Zotero.debug("Semantic Scholar Citations: shutdown");
     if (SemanticScholarCitations) {
-        SemanticScholarCitations.removeFromAllWindows();
+        SemanticScholarCitations.unregisterMenus();
+        try {
+            for (const win of Zotero.getMainWindows()) {
+                SemanticScholarCitations.removeKeyboardShortcut(win);
+            }
+        } catch (e) {
+            /* ignore */
+        }
     }
     SemanticScholarCitations = undefined;
 }

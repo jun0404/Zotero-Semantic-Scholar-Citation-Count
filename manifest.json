@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Semantic Scholar Citations",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Fetches citation counts from Semantic Scholar and displays them in the Extra field. Compatible with Zotero 8 and 9.",
   "author": "Sangjun",
   "homepage_url": "https://github.com/jun0404/Zotero-Semantic-Scholar-Citation-Count",

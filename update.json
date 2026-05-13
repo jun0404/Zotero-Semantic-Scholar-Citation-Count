@@ -3,8 +3,8 @@
     "semantic-scholar-citations@example.com": {
       "updates": [
         {
-          "version": "4.0.0",
-          "update_link": "https://github.com/jun0404/Zotero-Semantic-Scholar-Citation-Count/raw/main/semantic-scholar-citations-4.0.0.xpi",
+          "version": "4.0.1",
+          "update_link": "https://github.com/jun0404/Zotero-Semantic-Scholar-Citation-Count/releases/download/v4.0.1/semantic-scholar-citations-4.0.1.xpi",
           "applications": {
             "zotero": {
               "strict_min_version": "8.0",

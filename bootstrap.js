@@ -9,6 +9,7 @@
  */
 
 var SemanticScholarCitations;
+var chromeHandle;
 
 const FTL_FILE = "semantic-scholar-citations.ftl";
 
@@ -23,7 +24,31 @@ function install() {
 async function startup({ id, version, rootURI }) {
     await Zotero.initializationPromise;
 
-    Zotero.debug("Semantic Scholar Citations: startup v4.0.0");
+    Zotero.debug("Semantic Scholar Citations: startup v4.0.1");
+
+    // Register the bundled locale/ directory so MozXULElement
+    // .insertFTLIfNeeded can find our FTL file. Without this step the
+    // MenuManager menu items have no rendered labels under Zotero 8/9.
+    try {
+        const aomStartup = Cc["@mozilla.org/addons/addon-manager-startup;1"]
+            .getService(Ci.amIAddonManagerStartup);
+        const manifestURI = Services.io.newURI(`${rootURI}manifest.json`);
+        chromeHandle = aomStartup.registerChrome(manifestURI, [
+            [
+                "locale",
+                "semantic-scholar-citations",
+                "en-US",
+                "locale/en-US/",
+            ],
+        ]);
+        Zotero.debug(
+            "Semantic Scholar Citations: registered chrome/locale paths"
+        );
+    } catch (e) {
+        Zotero.debug(
+            "Semantic Scholar Citations: chrome registration failed – " + e
+        );
+    }
 
     SemanticScholarCitations = {
         id,
@@ -89,10 +114,21 @@ async function startup({ id, version, rootURI }) {
                                 );
                                 context?.setVisible?.(visible);
                             },
-                            onCommand: () =>
-                                this.updateSelectedItems(
+                            onCommand: (_event, context) => {
+                                const items = (context?.items ?? []).filter(
+                                    (it) => it?.isRegularItem?.()
+                                );
+                                if (items.length === 0) {
+                                    this.updateSelectedItems(
+                                        this.getActiveWindow()
+                                    );
+                                    return;
+                                }
+                                this.updateItems(
+                                    items,
                                     this.getActiveWindow()
-                                ),
+                                );
+                            },
                         },
                     ],
                 });
@@ -493,6 +529,14 @@ function shutdown() {
         } catch (e) {
             /* ignore */
         }
+    }
+    if (chromeHandle) {
+        try {
+            chromeHandle.destruct();
+        } catch (e) {
+            /* ignore */
+        }
+        chromeHandle = null;
     }
     SemanticScholarCitations = undefined;
 }

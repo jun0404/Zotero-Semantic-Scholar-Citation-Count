@@ -7,6 +7,16 @@ Fetches citation counts from Semantic Scholar and stores them in the **Extra** f
 - **Zotero 8.0 – 9.0.\*** (built on Firefox 140 ESR)
 - For Zotero 7, use the `3.0.0` release.
 
+## What's new in 4.0.1
+
+- Fixed: menu labels were not rendering because the bundled `locale/`
+  directory was never registered with the addon manager. The plugin now
+  calls `amIAddonManagerStartup.registerChrome` at startup so
+  `MozXULElement.insertFTLIfNeeded` can find the Fluent file.
+- Items context-menu action now reads the items directly from the
+  MenuManager context object (instead of re-reading the pane selection),
+  which matches the pattern used by other Zotero 8/9 plugins.
+
 ## What's new in 4.0.0
 
 - Updated for **Zotero 9** compatibility.
